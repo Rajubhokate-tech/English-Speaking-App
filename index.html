@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>इंग्रजी बोलण्याचा सराव</title>
+<style>
+:root{--bg:#f7f8fb;--card:#fff;--text:#1d2433;--muted:#6b7280;--accent:#2563eb;--ok:#16a34a;--bad:#dc2626;--line:#e5e7eb}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f1420;--card:#1a2130;--text:#e6e9f2;--muted:#9aa3b5;--accent:#60a5fa;--ok:#4ade80;--bad:#f87171;--line:#2a3345}}
+:root[data-theme="dark"]{--bg:#0f1420;--card:#1a2130;--text:#e6e9f2;--muted:#9aa3b5;--accent:#60a5fa;--ok:#4ade80;--bad:#f87171;--line:#2a3345}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,"Noto Sans Devanagari","Noto Sans",sans-serif}
+body{padding:env(safe-area-inset-top,0px) 16px env(safe-area-inset-bottom,0px);min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:16px 0}
+h1{font-size:1.3rem;margin:8px 0 14px;text-align:center}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tab{flex:1;padding:10px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;font-size:.95rem;cursor:pointer}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tab:disabled{opacity:.4;cursor:not-allowed}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:14px}
+.progress{font-size:.85rem;color:var(--muted);margin-bottom:8px}
+.en{font-size:1.3rem;font-weight:600;line-height:1.5;margin:6px 0 10px}
+.mr{color:var(--muted);font-size:1rem;margin-bottom:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+button.action{flex:1;min-width:130px;padding:13px;border:0;border-radius:10px;font-size:1rem;cursor:pointer;background:var(--accent);color:#fff}
+button.action.secondary{background:var(--card);color:var(--text);border:1px solid var(--line)}
+button.action:disabled{opacity:.5}
+.result{margin-top:14px;padding:14px;border-radius:10px;border:1px solid var(--line)}
+.good{color:var(--ok);font-weight:600}
+.bad{color:var(--bad);font-weight:600}
+.heard{color:var(--muted);font-size:.95rem;margin-top:6px}
+.missing{margin-top:6px}
+.miss-word{display:inline-block;background:rgba(220,38,38,.12);color:var(--bad);border-radius:6px;padding:2px 6px;margin:2px;font-size:.9rem}
+.note{font-size:.85rem;color:var(--muted);margin-top:14px;line-height:1.5}
+.stats{display:flex;justify-content:space-between;font-size:.9rem;color:var(--muted);margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>इंग्रजी बोलण्याचा सराव</h1>
+  <div class="tabs" id="tabs"></div>
+  <div style="margin-bottom:10px"><select id="voiceSel" style="width:100%;padding:8px;border-radius:8px;font-size:.95rem"><option value="">आवाज: स्वयंचलित</option></select></div>
+
+  <div class="card" id="app">
+    <div class="progress" id="progress"></div>
+    <div class="en" id="en"></div>
+    <div class="mr" id="mr"></div>
+    <div class="row">
+      <button class="action secondary" id="listen">🔊 ऐका</button>
+      <button class="action" id="speak">🎤 बोला</button>
+    </div>
+    <div id="result"></div>
+    <div class="row" style="margin-top:14px">
+      <button class="action secondary" id="prev">← मागे</button>
+      <button class="action" id="next">पुढे →</button>
+    </div>
+  </div>
+
+  <div class="card" id="summary" style="display:none"></div>
+
+  <p class="note" id="support"></p>
+</div>
+
+<script>
+const BEGINNER_ALL = [
+{ title: "ओळख (Introduction)", items: [
+    ["Hello, my name is Raju.", "नमस्कार, माझे नाव राजू आहे."],
+    ["What is your name?", "तुमचे नाव काय आहे?"],
+    ["Nice to meet you.", "तुम्हाला भेटून आनंद झाला."],
+    ["I am from Mumbai.", "मी मुंबईचा आहे."],
+    ["Where are you from?", "तुम्ही कुठून आहात?"],
+    ["I live in Mumbai.", "मी मुंबईत राहतो."],
+    ["I am a student.", "मी विद्यार्थी आहे."],
+    ["I am twenty years old.", "माझे वय वीस वर्षे आहे."],
+    ["I speak Marathi and Hindi.", "मी मराठी आणि हिंदी बोलतो."],
+    ["I am learning English.", "मी इंग्रजी शिकत आहे."]
+  ]},
+  { title: "कुटुंब (Family)", items: [
+    ["This is my family.", "हे माझे कुटुंब आहे."],
+    ["My father is a teacher.", "माझे वडील शिक्षक आहेत."],
+    ["My mother is a housewife.", "माझी आई गृहिणी आहे."],
+    ["I have one brother.", "मला एक भाऊ आहे."],
+    ["She is my sister.", "ती माझी बहीण आहे."],
+    ["We live together.", "आम्ही एकत्र राहतो."],
+    ["My grandmother lives with us.", "माझी आजी आमच्यासोबत राहते."],
+    ["He is my younger brother.", "तो माझा धाकटा भाऊ आहे."],
+    ["We have a small house.", "आमचे एक छोटे घर आहे."],
+    ["I love my family.", "मला माझे कुटुंब आवडते."]
+  ]},
+  { title: "दैनंदिन सवयी (Daily Routine)", items: [
+    ["I wake up at six o'clock.", "मी सहा वाजता उठतो."],
+    ["I brush my teeth.", "मी दात घासतो."],
+    ["I drink tea in the morning.", "मी सकाळी चहा पितो."],
+    ["I go to work by bus.", "मी बसने कामावर जातो."],
+    ["I eat lunch at one o'clock.", "मी दुपारी एक वाजता जेवतो."],
+    ["I read a book in the evening.", "मी संध्याकाळी पुस्तक वाचतो."],
+    ["I go to bed at ten o'clock.", "मी रात्री दहा वाजता झोपतो."],
+    ["I do exercise every day.", "मी रोज व्यायाम करतो."],
+    ["I usually watch TV after dinner.", "मी सहसा जेवणानंतर टीव्ही पाहतो."],
+    ["I have breakfast at home.", "मी घरी नाश्ता करतो."]
+  ]},
+  { title: "खरेदी (Shopping)", items: [
+    ["How much is this?", "हे किती रुपयांचे आहे?"],
+    ["It is too expensive.", "हे खूप महाग आहे."],
+    ["Can I see another one?", "मला दुसरे दाखवाल का?"],
+    ["I want to buy a shirt.", "मला एक शर्ट विकत घ्यायचा आहे."],
+    ["Do you have a smaller size?", "तुमच्याकडे लहान साईज आहे का?"],
+    ["I will take this one.", "मी हे घेईन."],
+    ["Can I pay by card?", "मी कार्डने पैसे देऊ शकतो का?"],
+    ["Keep the change.", "उरलेले पैसे तुम्ही ठेवा."],
+    ["Can I get a bag, please?", "कृपया मला एक पिशवी मिळेल का?"],
+    ["Thank you for shopping with us.", "आमच्याकडून खरेदी केल्याबद्दल धन्यवाद."]
+  ]},
+  { title: "जेवण (Food)", items: [
+    ["I am hungry.", "मला भूक लागली आहे."],
+    ["Can I see the menu?", "मला मेनू दाखवाल का?"],
+    ["I would like a cup of tea.", "मला एक कप चहा हवा आहे."],
+    ["This food is very tasty.", "हे जेवण खूप चविष्ट आहे."],
+    ["I do not eat meat.", "मी मांस खात नाही."],
+    ["Less spicy, please.", "कृपया कमी तिखट करा."],
+    ["Water, please.", "कृपया पाणी द्या."],
+    ["The bill, please.", "कृपया बिल द्या."],
+    ["I like vegetable rice.", "मला व्हेजिटेबल राईस आवडतो."],
+    ["What do you recommend?", "तुम्ही काय सुचवाल?"]
+  ]},
+{ title: "वेळ आणि तारीख (Time and Date)", items: [
+    ["What time is it?", "किती वाजले आहेत?"],
+    ["It is half past three.", "साडेतीन वाजले आहेत."],
+    ["Today is Monday.", "आज सोमवार आहे."],
+    ["My birthday is in October.", "माझा वाढदिवस ऑक्टोबरमध्ये आहे."],
+    ["See you tomorrow.", "उद्या भेटू."],
+    ["The meeting is at ten o'clock.", "बैठक दहा वाजता आहे."],
+    ["I was busy yesterday.", "काल मी व्यस्त होतो."],
+    ["We will meet next week.", "आपण पुढच्या आठवड्यात भेटू."],
+    ["The train leaves at six.", "गाडी सहा वाजता सुटते."],
+    ["What is the date today?", "आज तारीख काय आहे?"]
+  ]},
+  { title: "दिशा आणि रस्ता (Directions)", items: [
+    ["Where is the bus stop?", "बस स्टॉप कुठे आहे?"],
+    ["Turn left at the signal.", "सिग्नलवर डावीकडे वळा."],
+    ["Go straight and then turn right.", "सरळ जा आणि नंतर उजवीकडे वळा."],
+    ["It is near the hospital.", "ते दवाखान्याजवळ आहे."],
+    ["It is far from here.", "ते इथून लांब आहे."],
+    ["Is this the way to the station?", "स्टेशनला जाण्याचा हा रस्ता आहे का?"],
+    ["I am lost.", "मी रस्ता चुकलो आहे."],
+    ["Please show me on the map.", "कृपया मला नकाशावर दाखवा."],
+    ["It is opposite the bank.", "ते बँकेसमोर आहे."],
+    ["How can I reach the airport?", "मी विमानतळावर कसा पोहोचू?"]
+  ]},
+  { title: "हवामान (Weather)", items: [
+    ["It is very hot today.", "आज खूप उकडत आहे."],
+    ["It is raining.", "पाऊस पडत आहे."],
+    ["The weather is nice.", "हवा छान आहे."],
+    ["It is cold in the morning.", "सकाळी थंडी असते."],
+    ["Do not forget your umbrella.", "तुमची छत्री विसरू नका."],
+    ["It is windy outside.", "बाहेर वारा सुटला आहे."],
+    ["I like the rainy season.", "मला पावसाळा आवडतो."],
+    ["The sky is cloudy.", "आकाश ढगाळ आहे."],
+    ["Summer is very long here.", "इथे उन्हाळा खूप लांब असतो."],
+    ["Is it going to rain today?", "आज पाऊस पडणार आहे का?"]
+  ]},
+  { title: "फोन आणि संपर्क (Phone and Contact)", items: [
+    ["Hello, this is Raju speaking.", "नमस्कार, मी राजू बोलतोय."],
+    ["May I speak to Priya?", "मला प्रियाशी बोलता येईल का?"],
+    ["Please call me back later.", "कृपया नंतर मला परत फोन करा."],
+    ["The line is busy.", "लाईन व्यस्त आहे."],
+    ["Can you hear me?", "तुम्हाला माझा आवाज ऐकू येतो का?"],
+    ["My phone battery is low.", "माझ्या फोनची बॅटरी कमी आहे."],
+    ["What is your phone number?", "तुमचा फोन नंबर काय आहे?"],
+    ["I will send you a message.", "मी तुम्हाला मेसेज पाठवतो."],
+    ["Sorry, wrong number.", "माफ करा, चुकीचा नंबर लागला."],
+    ["Please speak a little louder.", "कृपया थोडे मोठ्याने बोला."]
+  ]},
+  { title: "ऑफिस आणि नोकरी (Office and Job)", items: [
+    ["I work in an office.", "मी एका ऑफिसमध्ये काम करतो."],
+    ["My job starts at nine.", "माझे काम सकाळी नऊ वाजता सुरू होते."],
+    ["I am a sales executive.", "मी सेल्स एक्झिक्युटिव्ह आहे."],
+    ["My manager is very helpful.", "माझे व्यवस्थापक खूप मदत करतात."],
+    ["I have a meeting at eleven.", "माझी अकरा वाजता बैठक आहे."],
+    ["Please send me the report.", "कृपया मला अहवाल पाठवा."],
+    ["I am working on a new project.", "मी एका नवीन प्रकल्पावर काम करत आहे."],
+    ["I finished my work on time.", "मी माझे काम वेळेवर पूर्ण केले."],
+    ["I need more time to finish this.", "हे पूर्ण करण्यासाठी मला आणखी वेळ हवा आहे."],
+    ["I am looking for a new job.", "मी नवीन नोकरी शोधत आहे."]
+  ]},
+{ title: "आरोग्य (Health)", items: [
+    ["I have a headache.", "मला डोके दुखत आहे."],
+    ["I feel very tired.", "मला खूप थकवा जाणवत आहे."],
+    ["I need to see a doctor.", "मला डॉक्टरांना दाखवायचे आहे."],
+    ["I have a fever.", "मला ताप आला आहे."],
+    ["Where is the pharmacy?", "औषधाचे दुकान कुठे आहे?"],
+    ["I have a cough and cold.", "मला खोकला आणि सर्दी झाली आहे."],
+    ["Drink plenty of water.", "भरपूर पाणी प्या."],
+    ["Take this medicine twice a day.", "हे औषध दिवसातून दोन वेळा घ्या."],
+    ["I am feeling better now.", "आता मला बरे वाटत आहे."],
+    ["I go for a walk every morning.", "मी रोज सकाळी फिरायला जातो."]
+  ]},
+  { title: "शिक्षण आणि अभ्यास (Education and Study)", items: [
+    ["I study at college.", "मी कॉलेजमध्ये शिकतो."],
+    ["My favourite subject is history.", "माझा आवडता विषय इतिहास आहे."],
+    ["I have an exam next week.", "पुढच्या आठवड्यात माझी परीक्षा आहे."],
+    ["I passed my test.", "मी माझी परीक्षा उत्तीर्ण झालो."],
+    ["Can you explain this again?", "तुम्ही हे पुन्हा समजावून सांगाल का?"],
+    ["I do not understand.", "मला समजले नाही."],
+    ["Please write it on the board.", "कृपया ते फळ्यावर लिहा."],
+    ["I read the newspaper every day.", "मी रोज वर्तमानपत्र वाचतो."],
+    ["I want to improve my English.", "मला माझे इंग्रजी सुधारायचे आहे."],
+    ["Practice makes perfect.", "सरावाने परिपूर्णता येते."]
+  ]},
+  { title: "छंद आणि आवडी (Hobbies and Interests)", items: [
+    ["I like listening to music.", "मला गाणी ऐकायला आवडतात."],
+    ["I enjoy playing cricket.", "मला क्रिकेट खेळायला आवडते."],
+    ["What do you do in your free time?", "तुम्ही मोकळ्या वेळेत काय करता?"],
+    ["I love cooking new dishes.", "मला नवीन पदार्थ बनवायला आवडतात."],
+    ["I am interested in photography.", "मला फोटोग्राफीमध्ये रस आहे."],
+    ["I watch movies on weekends.", "मी शनिवार-रविवारी चित्रपट पाहतो."],
+    ["She likes to draw.", "तिला चित्र काढायला आवडते."],
+    ["I do not like spicy food very much.", "मला फार तिखट पदार्थ आवडत नाहीत."],
+    ["He is very good at singing.", "तो गाण्यात खूप चांगला आहे."],
+    ["I want to learn to swim.", "मला पोहायला शिकायचे आहे."]
+  ]},
+  { title: "भावना (Feelings)", items: [
+    ["I am happy today.", "आज मी आनंदी आहे."],
+    ["I am sad because my friend left.", "माझा मित्र गेल्यामुळे मी दुःखी आहे."],
+    ["I am angry about this.", "याबद्दल मला राग आला आहे."],
+    ["I am worried about the exam.", "मला परीक्षेची काळजी वाटत आहे."],
+    ["I am excited for the trip.", "सहलीसाठी मी उत्सुक आहे."],
+    ["I am bored at home.", "घरी बसून मला कंटाळा आला आहे."],
+    ["I feel nervous before speaking.", "बोलण्यापूर्वी मला धडधड होते."],
+    ["I am proud of you.", "मला तुमचा अभिमान आहे."],
+    ["Do not worry, everything will be fine.", "काळजी करू नका, सर्व काही ठीक होईल."],
+    ["I am surprised to see you here.", "तुम्हाला इथे पाहून मला आश्चर्य वाटले."]
+  ]},
+  { title: "प्रवास (Travel)", items: [
+    ["I want to go to Goa.", "मला गोव्याला जायचे आहे."],
+    ["I have a train ticket.", "माझ्याकडे रेल्वेचे तिकीट आहे."],
+    ["Which platform is the train on?", "गाडी कोणत्या फलाटावर आहे?"],
+    ["I have a window seat.", "माझी सीट खिडकीजवळ आहे."],
+    ["Where can I get a taxi?", "मला टॅक्सी कुठे मिळेल?"],
+    ["How long does the journey take?", "प्रवासाला किती वेळ लागतो?"],
+    ["I need a hotel room for two nights.", "मला दोन रात्रींसाठी हॉटेलची खोली हवी आहे."],
+    ["Where is my luggage?", "माझे सामान कुठे आहे?"],
+    ["This is my passport.", "हा माझा पासपोर्ट आहे."],
+    ["Have a safe journey.", "तुमचा प्रवास सुखाचा होवो."]
+  ]},
+{ title: "भेटी आणि योजना (Making Plans)", items: [
+    ["Are you free this evening?", "तुम्ही आज संध्याकाळी मोकळे आहात का?"],
+    ["Let us meet at the café.", "आपण कॅफेमध्ये भेटू."],
+    ["Shall we go to the movies?", "आपण चित्रपट पाहायला जाऊया का?"],
+    ["Sorry, I am busy on Sunday.", "माफ करा, रविवारी मी व्यस्त आहे."],
+    ["That sounds good to me.", "मला ते चांगले वाटते."],
+    ["What time shall we meet?", "आपण किती वाजता भेटायचे?"],
+    ["Can we meet another day?", "आपण दुसऱ्या दिवशी भेटू शकतो का?"],
+    ["Let us celebrate together.", "आपण एकत्र आनंद साजरा करूया."],
+    ["I will call you when I reach.", "मी पोहोचल्यावर तुम्हाला फोन करतो."],
+    ["See you soon.", "लवकरच भेटू."]
+  ]},
+  { title: "मदत मागणे (Asking for Help)", items: [
+    ["Can you help me, please?", "कृपया मला मदत कराल का?"],
+    ["Excuse me, I need some help.", "माफ करा, मला थोडी मदत हवी आहे."],
+    ["Could you repeat that?", "तुम्ही ते पुन्हा सांगाल का?"],
+    ["What does this word mean?", "या शब्दाचा अर्थ काय आहे?"],
+    ["How do you say this in English?", "हे इंग्रजीत कसे म्हणतात?"],
+    ["Please speak slowly.", "कृपया हळू बोला."],
+    ["I did not hear you.", "मला तुमचे ऐकू आले नाही."],
+    ["Thank you so much for your help.", "तुमच्या मदतीबद्दल खूप खूप धन्यवाद."],
+    ["No problem.", "काही हरकत नाही."],
+    ["Can you show me how to do it?", "हे कसे करायचे ते तुम्ही दाखवाल का?"]
+  ]},
+  { title: "घर आणि परिसर (Home and Neighbourhood)", items: [
+    ["My house has two bedrooms.", "माझ्या घरात दोन बेडरूम आहेत."],
+    ["The kitchen is clean.", "स्वयंपाकघर स्वच्छ आहे."],
+    ["Please close the door.", "कृपया दरवाजा बंद करा."],
+    ["The fan is not working.", "पंखा चालत नाही."],
+    ["I live on the third floor.", "मी तिसऱ्या मजल्यावर राहतो."],
+    ["There is a park near my house.", "माझ्या घराजवळ एक बाग आहे."],
+    ["The water is not coming.", "पाणी येत नाही."],
+    ["Please clean the room.", "कृपया खोली स्वच्छ करा."],
+    ["My neighbours are very friendly.", "माझे शेजारी खूप मैत्रीपूर्ण आहेत."],
+    ["Turn off the light when you leave.", "बाहेर पडताना लाईट बंद करा."]
+  ]},
+  { title: "खेळ आणि मनोरंजन (Sports and Entertainment)", items: [
+    ["Who is your favourite player?", "तुमचा आवडता खेळाडू कोण आहे?"],
+    ["Our team won the match.", "आमच्या संघाने सामना जिंकला."],
+    ["We lost the game yesterday.", "काल आम्ही सामना हरलो."],
+    ["Let us play a game.", "आपण एक खेळ खेळूया."],
+    ["Did you watch the match?", "तुम्ही सामना पाहिला का?"],
+    ["The movie was very interesting.", "चित्रपट खूप रंजक होता."],
+    ["I want to watch a comedy show.", "मला एक विनोदी कार्यक्रम पाहायचा आहे."],
+    ["Which series are you watching?", "तुम्ही कोणती मालिका पाहत आहात?"],
+    ["The concert starts at seven.", "मैफल सात वाजता सुरू होते."],
+    ["I play badminton twice a week.", "मी आठवड्यातून दोन वेळा बॅडमिंटन खेळतो."]
+  ]},
+  { title: "उजळणी (Review)", items: [
+    ["I am glad to meet you again.", "तुम्हाला पुन्हा भेटून मला आनंद झाला."],
+    ["I have been learning English for a few months.", "मी काही महिन्यांपासून इंग्रजी शिकत आहे."],
+    ["I can introduce myself in English.", "मी स्वतःची इंग्रजीत ओळख करून देऊ शकतो."],
+    ["I can order food in English.", "मी इंग्रजीत जेवणाची ऑर्डर देऊ शकतो."],
+    ["I can ask for directions.", "मी रस्ता विचारू शकतो."],
+    ["I can talk about my family and my work.", "मी माझ्या कुटुंबाबद्दल आणि कामाबद्दल बोलू शकतो."],
+    ["I want to speak English with confidence.", "मला आत्मविश्वासाने इंग्रजी बोलायचे आहे."],
+    ["Every day I will practise ten new sentences.", "दररोज मी दहा नवीन वाक्यांचा सराव करेन."],
+    ["Keep practising and do not give up.", "सराव चालू ठेवा आणि हार मानू नका."],
+    ["Thank you for learning with me.", "माझ्यासोबत शिकल्याबद्दल धन्यवाद."]
+  ]}
+];
+const BEGINNER_ITEMS = [];
+for (const l of BEGINNER_ALL) for (const it of l.items) BEGINNER_ITEMS.push([it[0], it[1], l.title]);
+const MIDDLE_ALL = [
+{ title: "खरेदी (Shopping)", items: [
+    ["Could you show me something in a darker color?", "कृपया मला गडद रंगातील काहीतरी दाखवाल का?"],
+    ["Is there a discount on this item?", "या वस्तूवर काही सूट आहे का?"],
+    ["Do you accept online payments?", "तुम्ही ऑनलाइन पेमेंट स्वीकारता का?"],
+    ["I would like to exchange this, please.", "कृपया मला हे बदलून घ्यायचे आहे."],
+    ["The size is not right for me.", "हा साईज माझ्यासाठी योग्य नाही."],
+    ["Can I get a receipt, please?", "कृपया मला पावती मिळेल का?"],
+    ["This is a gift, can you wrap it?", "ही भेटवस्तू आहे, तुम्ही ती गुंडाळून द्याल का?"],
+    ["Do you offer home delivery?", "तुम्ही घरपोच डिलिव्हरी देता का?"],
+    ["I am just looking, thank you.", "मी फक्त बघतोय, धन्यवाद."],
+    ["The product is damaged, I want a refund.", "वस्तू खराब आहे, मला पैसे परत हवे आहेत."]
+  ]},
+  { title: "हॉटेल आणि जेवण (Restaurant)", items: [
+    ["We have a table for two, please.", "आम्हाला दोघांसाठी एक टेबल हवे आहे."],
+    ["Could we sit near the window?", "आम्ही खिडकीजवळ बसू शकतो का?"],
+    ["What is today's special dish?", "आजचा खास पदार्थ कोणता आहे?"],
+    ["I am allergic to peanuts.", "मला शेंगदाण्याची अ‍ॅलर्जी आहे."],
+    ["Could you make it less oily?", "हे कमी तेलकट करून द्याल का?"],
+    ["We would like to order now.", "आम्हाला आता ऑर्डर द्यायची आहे."],
+    ["The food is cold, could you warm it up?", "जेवण थंड आहे, ते गरम करून द्याल का?"],
+    ["Can we get the bill, please?", "कृपया आम्हाला बिल मिळेल का?"],
+    ["Do you accept credit cards here?", "इथे क्रेडिट कार्ड चालते का?"],
+    ["The service was excellent, thank you.", "सेवा उत्तम होती, धन्यवाद."]
+  ]},
+  { title: "विमानतळ आणि हॉटेल (Airport and Hotel)", items: [
+    ["I have a booking under my name.", "माझ्या नावावर बुकिंग आहे."],
+    ["What time does check-in start?", "चेक-इन कधी सुरू होते?"],
+    ["Could I have a room on a higher floor?", "मला वरच्या मजल्यावर खोली मिळेल का?"],
+    ["My flight is at ten in the morning.", "माझे विमान सकाळी दहा वाजता आहे."],
+    ["Where is the boarding gate?", "बोर्डिंग गेट कुठे आहे?"],
+    ["I have lost my boarding pass.", "माझा बोर्डिंग पास हरवला आहे."],
+    ["Is breakfast included in the room rate?", "खोलीच्या भाड्यात नाश्ता समाविष्ट आहे का?"],
+    ["Could you call a taxi for me?", "माझ्यासाठी टॅक्सी बोलवाल का?"],
+    ["I would like to check out tomorrow.", "मला उद्या चेक-आउट करायचे आहे."],
+    ["Please keep my luggage until evening.", "कृपया संध्याकाळपर्यंत माझे सामान ठेवून घ्या."]
+  ]},
+  { title: "डॉक्टरकडे (At the Doctor)", items: [
+    ["I have been having a sore throat since yesterday.", "मला काल पासून घसा दुखत आहे."],
+    ["I feel dizzy when I stand up.", "उभे राहिल्यावर मला चक्कर येते."],
+    ["Do I need any tests?", "मला काही तपासण्या कराव्या लागतील का?"],
+    ["How many times a day should I take this?", "हे औषध दिवसातून किती वेळा घ्यायचे?"],
+    ["Is it safe to take this with food?", "हे जेवणासोबत घेणे सुरक्षित आहे का?"],
+    ["I have an allergy to penicillin.", "मला पेनिसिलिनची अ‍ॅलर्जी आहे."],
+    ["When can I get the test report?", "तपासणीचा अहवाल मला कधी मिळेल?"],
+    ["Please write the prescription clearly.", "कृपया प्रिस्क्रिप्शन स्पष्ट लिहून द्या."],
+    ["I feel much better after the medicine.", "औषधानंतर मला खूप बरे वाटत आहे."],
+    ["Should I come back for a follow-up?", "फॉलो-अपसाठी मला परत यावे लागेल का?"]
+  ]},
+  { title: "बँक आणि बिल (Bank and Bills)", items: [
+    ["I would like to open a savings account.", "मला बचत खाते उघडायचे आहे."],
+    ["What documents do I need?", "मला कोणती कागदपत्रे लागतील?"],
+    ["Can I withdraw cash from this machine?", "या मशीनमधून मी रोख रक्कम काढू शकतो का?"],
+    ["My card is not working.", "माझे कार्ड चालत नाही."],
+    ["I want to change my address in the bank records.", "बँकेच्या नोंदीमध्ये मला माझा पत्ता बदलायचा आहे."],
+    ["What is the interest rate on this loan?", "या कर्जावर व्याजाचा दर किती आहे?"],
+    ["Please explain the charges on this bill.", "कृपया या बिलातील शुल्क समजावून सांगा."],
+    ["I want to pay my electricity bill online.", "मला माझे वीज बिल ऑनलाइन भरायचे आहे."],
+    ["Could you transfer this amount to my account?", "ही रक्कम माझ्या खात्यात ट्रान्सफर कराल का?"],
+    ["I need a statement for the last six months.", "मला शेवटच्या सहा महिन्यांचे स्टेटमेंट हवे आहे."]
+  ]},
+{ title: "नोकरीची मुलाखत (Job Interview)", items: [
+    ["Thank you for giving me this opportunity.", "मला ही संधी दिल्याबद्दल धन्यवाद."],
+    ["Could you tell me more about the role?", "या पदाबद्दल तुम्ही मला अधिक सांगाल का?"],
+    ["I have three years of experience in sales.", "मला विक्री क्षेत्रात तीन वर्षांचा अनुभव आहे."],
+    ["My greatest strength is my communication skill.", "माझी सर्वात मोठी ताकद माझे संवादकौशल्य आहे."],
+    ["I am good at working under pressure.", "दबावाखाली काम करण्यात मी चांगला आहे."],
+    ["Where do you see yourself in five years?", "पुढच्या पाच वर्षांत तुम्ही स्वतःला कुठे पाहता?"],
+    ["I am looking for a challenging job with growth.", "मला वाढीची संधी देणारी आव्हानात्मक नोकरी हवी आहे."],
+    ["When can I expect to hear back from you?", "तुमच्याकडून मला कधी उत्तर अपेक्षित आहे?"],
+    ["I would be happy to take a test or assignment.", "मला चाचणी किंवा असाइनमेंट द्यायला आनंद होईल."],
+    ["I am available to join within two weeks.", "मी दोन आठवड्यांत रुजू होऊ शकतो."]
+  ]},
+  { title: "ऑफिस मीटिंग (Office Meeting)", items: [
+    ["Let us start the meeting.", "आपण मीटिंग सुरू करूया."],
+    ["Can everyone hear me clearly?", "सर्वांना माझा आवाज स्पष्ट ऐकू येतो आहे ना?"],
+    ["I would like to share an update on the project.", "मला प्रकल्पाबद्दल एक अपडेट द्यायचा आहे."],
+    ["I completely agree with your point.", "तुमच्या मुद्याशी मी पूर्णपणे सहमत आहे."],
+    ["I have a different opinion on this.", "यावर माझे वेगळे मत आहे."],
+    ["Could you please repeat the last point?", "कृपया शेवटचा मुद्दा पुन्हा सांगाल का?"],
+    ["Let us move on to the next agenda item.", "आपण पुढच्या विषयाकडे वळूया."],
+    ["We need to finish this by Friday.", "हे आपल्याला शुक्रवारपर्यंत पूर्ण करायचे आहे."],
+    ["Who will be responsible for this task?", "हे काम कोण पाहणार आहे?"],
+    ["Thank you all for your time today.", "आज तुमच्या वेळेबद्दल सर्वांचे धन्यवाद."]
+  ]},
+  { title: "फोन कॉल (Phone Call)", items: [
+    ["This is Raju calling from Pune.", "मी पुण्यातून राजू बोलतोय."],
+    ["I am calling regarding my order.", "मी माझ्या ऑर्डरबाबत फोन करत आहे."],
+    ["Could you put me through to the sales department?", "मला विक्री विभागाशी जोडून द्याल का?"],
+    ["I will call you back in ten minutes.", "मी दहा मिनिटांत तुम्हाला परत फोन करतो."],
+    ["The network is very poor here.", "इथे नेटवर्क खूप कमजोर आहे."],
+    ["Can you speak a bit slowly, please?", "कृपया थोडे हळू बोलाल का?"],
+    ["Please leave your message after the beep.", "कृपया बीपनंतर तुमचा संदेश सोडा."],
+    ["I am sorry, I did not catch that.", "माफ करा, ते मला नीट ऐकू आले नाही."],
+    ["Is there anything else I can help you with?", "मी तुम्हाला आणखी काही मदत करू शकतो का?"],
+    ["Thank you for calling, have a nice day.", "फोन केल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो."]
+  ]},
+  { title: "ईमेल लिहिणे (Writing Emails)", items: [
+    ["I am writing to follow up on my application.", "माझ्या अर्जाच्या पाठपुराव्यासाठी मी लिहित आहे."],
+    ["Please find the attached document for your reference.", "तुमच्या माहितीसाठी सोबत जोडलेले दस्तऐवज पाहा."],
+    ["I look forward to hearing from you.", "तुमच्या उत्तराची मी वाट पाहतो आहे."],
+    ["Kindly let me know if you need anything else.", "तुम्हाला आणखी काही हवे असल्यास कृपया मला कळवा."],
+    ["Sorry for the delay in my reply.", "माझ्या उत्तरात उशीर झाल्याबद्दल माफ करा."],
+    ["Could you please confirm the meeting time?", "कृपया मीटिंगची वेळ निश्चित कराल का?"],
+    ["I am unable to attend the meeting tomorrow.", "मी उद्याच्या मीटिंगला उपस्थित राहू शकणार नाही."],
+    ["Please reply at your earliest convenience.", "कृपया तुम्हाला सोयीस्कर असेल तेव्हा लवकर उत्तर द्या."],
+    ["Thank you for your prompt response.", "तुमच्या तत्पर उत्तराबद्दल धन्यवाद."],
+    ["Best regards, Raju.", "आपला विश्वासू, राजू."]
+  ]},
+  { title: "आरोग्य आणि आहार (Health and Diet)", items: [
+    ["I am trying to eat more vegetables.", "मी जास्त भाज्या खाण्याचा प्रयत्न करत आहे."],
+    ["I should avoid sugar and fried food.", "मी साखर आणि तळलेले पदार्थ टाळायला हवेत."],
+    ["I do yoga for twenty minutes every morning.", "मी रोज सकाळी वीस मिनिटे योगा करतो."],
+    ["I have been sleeping less than six hours.", "मी सहा तासांपेक्षा कमी झोपत आहे."],
+    ["Drinking enough water is very important.", "पुरेसे पाणी पिणे खूप महत्त्वाचे आहे."],
+    ["I quit smoking last year.", "मी गेल्या वर्षी धूम्रपान सोडले."],
+    ["My doctor advised me to walk daily.", "माझ्या डॉक्टरांनी मला रोज चालण्याचा सल्ला दिला."],
+    ["I feel more energetic after breakfast.", "नाश्त्यानंतर मला जास्त उत्साह वाटतो."],
+    ["A balanced diet keeps me healthy.", "संतुलित आहार मला निरोगी ठेवतो."],
+    ["I get stressed when there is too much work.", "खूप काम असले की मला ताण येतो."]
+  ]},
+{ title: "शहर आणि पर्यावरण (City and Environment)", items: [
+    ["The traffic in this city is getting worse every year.", "या शहरातील वाहतूक दरवर्षी अधिकच वाढत आहे."],
+    ["We should reduce the use of plastic bags.", "आपण प्लास्टिक पिशव्यांचा वापर कमी करायला हवा."],
+    ["The air quality is poor during winter.", "हिवाळ्यात हवेची गुणवत्ता खराब असते."],
+    ["Public transport is cheap and convenient here.", "इथे सार्वजनिक वाहतूक स्वस्त आणि सोयीची आहे."],
+    ["More trees should be planted in the city.", "शहरात अधिक झाडे लावायला हवीत."],
+    ["The water supply was cut off for two days.", "दोन दिवस पाणीपुरवठा बंद होता."],
+    ["Waste should be separated into wet and dry.", "कचरा ओला आणि सुका असा वेगळा करायला हवा."],
+    ["Many people now prefer cycling to work.", "आता अनेक लोक कामावर सायकलने जाणे पसंत करतात."],
+    ["The new park is a great place for children.", "नवीन बाग मुलांसाठी उत्तम जागा आहे."],
+    ["Pollution has increased because of construction.", "बांधकामामुळे प्रदूषण वाढले आहे."]
+  ]},
+  { title: "शिक्षण आणि अभ्यास (Education and Studies)", items: [
+    ["I am preparing for a competitive exam.", "मी एका स्पर्धा परीक्षेची तयारी करत आहे."],
+    ["Regular practice helps you remember better.", "नियमित सरावाने लक्षात चांगले राहते."],
+    ["Could you recommend some good books for this subject?", "या विषयासाठी काही चांगली पुस्तके सुचवाल का?"],
+    ["I need to submit the assignment by tomorrow.", "मला उद्यापर्यंत असाइनमेंट जमा करायची आहे."],
+    ["The professor explained the topic very clearly.", "प्राध्यापकांनी विषय अतिशय स्पष्टपणे समजावला."],
+    ["I am planning to do a master's degree.", "मी पदव्युत्तर पदवी घ्यायचा विचार करत आहे."],
+    ["Online courses are useful for learning new skills.", "नवीन कौशल्ये शिकण्यासाठी ऑनलाइन कोर्स उपयुक्त आहेत."],
+    ["I scored higher marks than I expected.", "मला अपेक्षेपेक्षा जास्त गुण मिळाले."],
+    ["Group discussion improves understanding.", "गटचर्चेमुळे समज वाढते."],
+    ["I am not confident about my results yet.", "माझ्या निकालाबद्दल मला अजून खात्री नाही."]
+  ]},
+  { title: "सहल आणि नियोजन (Trip Planning)", items: [
+    ["We are planning a trip to Kashmir next summer.", "आम्ही पुढच्या उन्हाळ्यात काश्मीरला सहलीची योजना आखत आहोत."],
+    ["How many days do we need for this place?", "या ठिकाणासाठी आपल्याला किती दिवस लागतील?"],
+    ["Let us book the tickets in advance.", "आपण आधीच तिकिटे बुक करूया."],
+    ["The hotel is close to the main market.", "हॉटेल मुख्य बाजाराजवळ आहे."],
+    ["Do we need a permit to visit that area?", "त्या भागात जाण्यासाठी परवाना लागतो का?"],
+    ["The weather is pleasant during this season.", "या हंगामात हवामान आल्हाददायक असते."],
+    ["We should carry enough cash and medicines.", "आपण पुरेशी रोकड आणि औषधे सोबत ठेवायला हवीत."],
+    ["The tour guide will meet us at the entrance.", "टूर गाईड आपल्याला प्रवेशद्वारावर भेटतील."],
+    ["Is it possible to change the travel dates?", "प्रवासाच्या तारखा बदलणे शक्य आहे का?"],
+    ["I have already packed my bags for the trip.", "मी सहलीसाठी माझ्या बॅगा आधीच भरल्या आहेत."]
+  ]},
+  { title: "उत्पादनांची तुलना (Comparing Products)", items: [
+    ["Which phone is better for the camera?", "कॅमेऱ्यासाठी कोणता फोन चांगला आहे?"],
+    ["This model is cheaper but less durable.", "हे मॉडेल स्वस्त आहे पण कमी टिकाऊ आहे."],
+    ["What is the difference between these two?", "या दोघांमध्ये काय फरक आहे?"],
+    ["The second one has a larger battery.", "दुसऱ्याची बॅटरी मोठी आहे."],
+    ["Do you have a warranty on this product?", "या उत्पादनावर वॉरंटी आहे का?"],
+    ["I want something within my budget.", "मला माझ्या बजेटमध्ये बसेल असे काहीतरी हवे आहे."],
+    ["Is the quality the same as the previous model?", "याची गुणवत्ता आधीच्या मॉडेलसारखीच आहे का?"],
+    ["Which one would you recommend for daily use?", "रोजच्या वापरासाठी तुम्ही कोणता सुचवाल?"],
+    ["The reviews for this brand are very good.", "या ब्रँडची समीक्षा खूप चांगली आहे."],
+    ["I will think about it and let you know.", "मी याचा विचार करून तुम्हाला कळवतो."]
+  ]},
+  { title: "तक्रार आणि सेवा (Complaints and Service)", items: [
+    ["I would like to make a complaint.", "मला एक तक्रार नोंदवायची आहे."],
+    ["The service was very slow today.", "आज सेवा खूप संथ होती."],
+    ["I have been waiting for an hour already.", "मी आधीच एक तास वाट पाहत आहे."],
+    ["This product stopped working after two days.", "दोन दिवसांनंतर हे उत्पादन चालायचे बंद झाले."],
+    ["Could you escalate this to your manager?", "हे तुमच्या व्यवस्थापकांपर्यंत पोहोचवाल का?"],
+    ["I was charged twice for the same item.", "एकाच वस्तूसाठी माझ्याकडून दोनदा पैसे घेतले गेले."],
+    ["Please correct the bill as soon as possible.", "कृपया बिल लवकरात लवकर दुरुस्त करा."],
+    ["I am not satisfied with the solution.", "दिलेल्या उपायाने मी समाधानी नाही."],
+    ["Thank you for resolving the issue quickly.", "समस्या लवकर सोडवल्याबद्दल धन्यवाद."],
+    ["I will leave a review about my experience.", "माझ्या अनुभवाबद्दल मी प्रतिक्रिया नोंदवेन."]
+  ]},
+{ title: "कामाचा अनुभव (Work Experience)", items: [
+    ["I worked as a teacher for five years.", "मी पाच वर्षे शिक्षक म्हणून काम केले."],
+    ["My last job taught me to manage time well.", "माझ्या मागील नोकरीने मला वेळेचे नियोजन शिकवले."],
+    ["I was responsible for a team of four people.", "चार जणांच्या टीमची जबाबदारी माझ्याकडे होती."],
+    ["I left the company because I wanted a new challenge.", "मला नवे आव्हान हवे होते म्हणून मी ती कंपनी सोडली."],
+    ["I have handled customer complaints every day.", "मी रोज ग्राहकांच्या तक्रारी हाताळल्या आहेत."],
+    ["I helped the team meet the deadline.", "मी टीमला मुदतीत काम पूर्ण करण्यासाठी मदत केली."],
+    ["I learned to use new software at work.", "कामावर मी नवीन सॉफ्टवेअर वापरायला शिकलो."],
+    ["My supervisor appreciated my hard work.", "माझ्या वरिष्ठांनी माझ्या मेहनतीचे कौतुक केले."],
+    ["I received training in customer service.", "मला ग्राहक सेवेचे प्रशिक्षण मिळाले."],
+    ["I am proud of the project I completed last year.", "गेल्या वर्षी पूर्ण केलेल्या प्रकल्पाचा मला अभिमान आहे."]
+  ]},
+  { title: "करिअर आणि ध्येये (Career and Goals)", items: [
+    ["My long-term goal is to start my own business.", "माझे दीर्घकालीन ध्येय स्वतःचा व्यवसाय सुरू करणे आहे."],
+    ["I want to become an expert in my field.", "मला माझ्या क्षेत्रातील तज्ज्ञ बनायचे आहे."],
+    ["I am willing to relocate for a better opportunity.", "चांगल्या संधीसाठी मी स्थलांतर करायला तयार आहे."],
+    ["I would like to get a promotion within two years.", "मला दोन वर्षांत पदोन्नती मिळावी अशी इच्छा आहे."],
+    ["Learning never stops, and I keep upgrading my skills.", "शिकणे कधीच थांबत नाही, म्हणून मी माझी कौशल्ये सतत सुधारतो."],
+    ["I am looking for a job with good work-life balance.", "चांगला कामाचा आणि वैयक्तिक आयुष्याचा समतोल असलेली नोकरी मी शोधत आहे."],
+    ["Networking has helped me find many opportunities.", "नेटवर्किंगमुळे मला अनेक संधी मिळाल्या आहेत."],
+    ["I need to improve my presentation skills.", "मला माझी सादरीकरण कौशल्ये सुधारायची आहेत."],
+    ["I am planning to take a certification course.", "मी एक प्रमाणपत्र कोर्स करण्याचा विचार करत आहे."],
+    ["I believe hard work leads to success.", "माझा विश्वास आहे की कष्टामुळे यश मिळते."]
+  ]},
+  { title: "सामाजिक कार्यक्रम (Social Events)", items: [
+    ["Would you like to join us for dinner on Saturday?", "शनिवारी रात्रीच्या जेवणासाठी तुम्ही आमच्यासोबत याल का?"],
+    ["I am happy to be invited to your wedding.", "तुमच्या लग्नाचे निमंत्रण मिळाल्याने मला आनंद झाला."],
+    ["Congratulations on your new job!", "तुमच्या नव्या नोकरीबद्दल अभिनंदन!"],
+    ["What kind of music do you enjoy?", "तुम्हाला कोणत्या प्रकारचे संगीत आवडते?"],
+    ["The party was really enjoyable last night.", "काल रात्रीची पार्टी खरोखर आनंददायी होती."],
+    ["I am sorry I could not come to the event.", "माफ करा, मी कार्यक्रमाला येऊ शकलो नाही."],
+    ["Let us take a group photo before we leave.", "निघण्यापूर्वी आपण सगळे मिळून एक फोटो काढूया."],
+    ["Please give my regards to your family.", "कृपया तुमच्या कुटुंबीयांना माझा नमस्कार सांगा."],
+    ["I really enjoyed spending time with you.", "तुमच्यासोबत वेळ घालवायला मला खरोखर आवडले."],
+    ["Let us keep in touch and meet again soon.", "आपण संपर्कात राहूया आणि लवकरच पुन्हा भेटूया."]
+  ]},
+  { title: "प्रवासातील अडचणी (Travel Problems)", items: [
+    ["My train is delayed by two hours.", "माझी गाडी दोन तास उशिरा आहे."],
+    ["I missed my connecting flight.", "माझे कनेक्टिंग विमान चुकले."],
+    ["The bus driver took a wrong route.", "बसच्या चालकाने चुकीचा रस्ता घेतला."],
+    ["My bag was lost at the airport.", "विमानतळावर माझी बॅग हरवली."],
+    ["Can you help me find the lost and found office?", "हरवलेल्या वस्तूंचे कार्यालय शोधायला तुम्ही मला मदत कराल का?"],
+    ["The hotel room is not clean.", "हॉटेलची खोली स्वच्छ नाही."],
+    ["I need a new ticket because of the cancellation.", "रद्द झाल्यामुळे मला नवीन तिकीट हवे आहे."],
+    ["Is there a bus to the city center from here?", "इथून शहराच्या मध्यवर्ती भागाकडे बस आहे का?"],
+    ["I lost my phone, and I need to report it.", "माझा फोन हरवला आहे, मला त्याची तक्रार करायची आहे."],
+    ["Please call the emergency number immediately.", "कृपया लगेच आपत्कालीन नंबरवर फोन करा."]
+  ]},
+  { title: "उजळणी (Intermediate Review)", items: [
+    ["I can now talk about my work with confidence.", "मी आता आत्मविश्वासाने माझ्या कामाबद्दल बोलू शकतो."],
+    ["I can handle most daily situations in English.", "इंग्रजीत बहुतेक रोजच्या परिस्थिती मी हाताळू शकतो."],
+    ["I can write a simple email and follow up politely.", "मी साधा ईमेल लिहू शकतो आणि सभ्यपणे पाठपुरावा करू शकतो."],
+    ["I can explain my opinion and give reasons.", "मी माझे मत मांडू शकतो आणि कारणेही देऊ शकतो."],
+    ["I can understand a phone call in English.", "मी इंग्रजीत आलेला फोन कॉल समजू शकतो."],
+    ["I still need to practise pronunciation.", "उच्चारावर मला अजून सराव करायचा आहे."],
+    ["I will keep practising every day.", "मी रोज सराव करत राहीन."],
+    ["Mistakes are a natural part of learning.", "चुका करणे हा शिकण्याचाच एक भाग आहे."],
+    ["Small steps every day lead to big progress.", "दररोजची छोटी पावले मोठ्या प्रगतीकडे नेतात."],
+    ["Thank you for practising with me today.", "आज माझ्यासोबत सराव केल्याबद्दल धन्यवाद."]
+  ]}
+];
+const MIDDLE_ITEMS = [];
+for (const l of MIDDLE_ALL) for (const it of l.items) MIDDLE_ITEMS.push([it[0], it[1], l.title]);
+const LEVELS = [
+  { name: "नवशिक्या", items: BEGINNER_ITEMS },
+  { name: "मध्यम", items: MIDDLE_ITEMS },
+  { name: "प्रगत", items: [
+    ["Despite the challenges, we managed to complete the project on time.", "अनेक अडचणी असूनही आम्ही प्रकल्प वेळेत पूर्ण केला."],
+    ["In my opinion, education should focus more on critical thinking.", "माझ्या मते शिक्षणाने चिकित्सक विचारावर अधिक भर द्यायला हवा."],
+    ["I would have accepted the offer if the salary had been higher.", "पगार जास्त असता तर मी ही ऑफर स्वीकारली असती."],
+    ["The research suggests a strong correlation between sleep and productivity.", "संशोधनानुसार झोप आणि उत्पादकता यांच्यात मजबूत संबंध आहे."],
+    ["Although he was tired, he insisted on finishing the presentation.", "तो थकलेला असूनही त्याने सादरीकरण पूर्ण करण्याचा आग्रह धरला."],
+    ["Rather than complaining, we should focus on finding solutions.", "तक्रार करण्याऐवजी आपण उपाय शोधायला हवेत."],
+    ["The policy has been widely criticised for its lack of transparency.", "पारदर्शकतेच्या अभावामुळे या धोरणावर मोठी टीका झाली आहे."],
+    ["Had I known about the meeting, I would have prepared better.", "मला बैठकीबद्दल माहिती असती तर मी अधिक चांगली तयारी केली असती."],
+    ["Her argument was persuasive, yet it lacked empirical evidence.", "तिचा युक्तिवाद प्रभावी होता, पण त्याला अनुभवजन्य पुराव्याची जोड नव्हती."],
+    ["Communication skills often matter more than technical knowledge in leadership roles.", "नेतृत्वाच्या भूमिकेत तांत्रिक ज्ञानापेक्षा संवादकौशल्य अनेकदा अधिक महत्त्वाचे ठरते."]
+  ]}
+];
+
+const PASS = 0.8;
+const state = { level: 0, idx: 0, scores: {} };
+
+const $ = id => document.getElementById(id);
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function normalize(s) {
+  return s.toLowerCase().replace(/[^a-z0-9\s']/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isUnlocked(i) {
+  return true; // सर्व स्तर सुरुवातीपासून उघडे
+  const prev = LEVELS[i - 1].items.length;
+  let done = 0;
+  for (let k = 0; k < prev; k++) {
+    const s = state.scores[`${i - 1}-${k}`];
+    if (s !== undefined && s >= PASS) done++;
+  }
+  return done / prev >= PASS;
+}
+
+function renderTabs() {
+  $("tabs").innerHTML = "";
+  LEVELS.forEach((lv, i) => {
+    const b = document.createElement("button");
+    b.className = "tab" + (i === state.level ? " active" : "");
+    b.textContent = lv.name + (isUnlocked(i) ? "" : " 🔒");
+    b.disabled = !isUnlocked(i);
+    b.onclick = () => { state.level = i; state.idx = 0; render(); };
+    $("tabs").appendChild(b);
+  });
+}
+
+function render() {
+  renderTabs();
+  const items = LEVELS[state.level].items;
+  if (state.idx >= items.length) {
+    showSummary();
+    return;
+  }
+  $("summary").style.display = "none";
+  $("app").style.display = "block";
+  const [en, mr] = items[state.idx];
+  $("progress").textContent = `${LEVELS[state.level].name} • ${state.idx + 1} / ${items.length}${items[state.idx][2] ? " • " + items[state.idx][2] : ""}`;
+  $("en").textContent = en;
+  $("mr").textContent = mr;
+  $("result").innerHTML = "";
+  $("prev").disabled = state.idx === 0;
+  $("support").textContent = SpeechRec
+    ? ""
+    : "हे ब्राउझर बोलणे ओळखत नाही. Chrome (Android) किंवा Chrome (कॉम्प्युटर) वापरा.";
+  $("speak").disabled = !SpeechRec;
+}
+
+function showSummary() {
+  $("app").style.display = "none";
+  const items = LEVELS[state.level].items;
+  let done = 0, total = 0;
+  items.forEach((_, k) => {
+    const s = state.scores[`${state.level}-${k}`];
+    if (s !== undefined) { total++; if (s >= PASS) done++; }
+  });
+  const pct = Math.round((done / items.length) * 100);
+  const canNext = state.level + 1 < LEVELS.length && isUnlocked(state.level + 1);
+  $("summary").style.display = "block";
+  $("summary").innerHTML = `
+    <div class="en">${LEVELS[state.level].name} पूर्ण!</div>
+    <div class="mr">${done} / ${items.length} वाक्ये ${Math.round(PASS*100)}% पेक्षा जास्त योग्य (${pct}%)</div>
+    <div class="row">
+      <button class="action secondary" id="retry">पुन्हा सराव</button>
+      ${canNext ? '<button class="action" id="gonext">पुढची पातळी →</button>' : ""}
+    </div>
+    ${!canNext && state.level + 1 < LEVELS.length ? '<p class="note">पुढची पातळी उघडण्यासाठी किमान ८०% वाक्ये योग्य बोला.</p>' : ""}`;
+  $("retry").onclick = () => { state.idx = 0; render(); };
+  if (canNext) $("gonext").onclick = () => { state.level++; state.idx = 0; render(); };
+  renderTabs();
+}
+
+// शब्दांचा उच्चार आवाजात कसा वाचायचा ते येथे लिहा (मूळ मजकूर बदलत नाही)
+const PRON = {
+  "Raju": "Rah joo",
+  "Maharashtra": "Mah-ha-RAHSH-truh",
+  "Marathi": "Mah-RAH-thee",
+  "Pune": "Poona",
+  "Mumbai": "Mum bai"
+};
+
+function fillVoices() {
+  const sel = $("voiceSel");
+  if (!sel || sel.options.length > 1) return;
+  speechSynthesis.getVoices().filter(v => v.lang.startsWith("en")).forEach(v => {
+    const o = document.createElement("option");
+    o.value = v.name;
+    o.textContent = v.name + " (" + v.lang + ")";
+    sel.appendChild(o);
+  });
+}
+
+function pickEnglishVoice() {
+  const voices = speechSynthesis.getVoices();
+  const chosen = $("voiceSel") && $("voiceSel").value;
+  if (chosen) { const c = voices.find(x => x.name === chosen); if (c) return c; }
+  const india = voices.find(v => v.lang === "en-IN");
+  if (india) return india;
+  const natural = voices.find(v => v.lang.startsWith("en") && /Google US English|Natural|Aria|Jenny|Zira/i.test(v.name));
+  if (natural) return natural;
+  return voices.find(v => v.lang === "en-US")
+      || voices.find(v => v.lang === "en-GB")
+      || voices.find(v => v.lang.startsWith("en"))
+      || null;
+}
+
+function speakText(text) {
+  if (!("speechSynthesis" in window)) return;
+  let spoken = text;
+  for (const [word, sound] of Object.entries(PRON)) {
+    spoken = spoken.replace(new RegExp("\\b" + word + "\\b", "g"), sound);
+  }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(spoken);
+  const voice = pickEnglishVoice();
+  u.lang = voice ? voice.lang : "en-US";
+  if (voice) u.voice = voice;
+  u.rate = 0.8;
+  u.pitch = 1.1;
+  speechSynthesis.speak(u);
+}
+
+$("listen").onclick = () => speakText(LEVELS[state.level].items[state.idx][0]);
+
+$("speak").onclick = () => {
+  if (!SpeechRec) return;
+  const target = LEVELS[state.level].items[state.idx][0];
+  const rec = new SpeechRec();
+  rec.lang = "en-US";
+  rec.interimResults = false;
+  rec.maxAlternatives = 3;
+  $("speak").disabled = true;
+  $("speak").textContent = "🎙 ऐकत आहे...";
+  rec.onresult = e => {
+    const heard = Array.from(e.results[0]).map(a => a.transcript);
+    const best = heard.map(h => score(target, h)).reduce((a, b) => (b.ratio > a.ratio ? b : a));
+    const key = `${state.level}-${state.idx}`;
+    state.scores[key] = Math.max(state.scores[key] ?? 0, best.ratio);
+    showResult(best, heard[0]);
+  };
+  rec.onerror = () => {
+    $("result").innerHTML = '<p class="bad">बोलणे ओळखता आले नाही. परवानगी तपासा आणि पुन्हा प्रयत्न करा.</p>';
+  };
+  rec.onend = () => {
+    $("speak").disabled = false;
+    $("speak").textContent = "🎤 बोला";
+  };
+  rec.start();
+};
+
+function score(target, spoken) {
+  const t = normalize(target).split(" ");
+  const s = new Set(normalize(spoken).split(" "));
+  const missing = t.filter(w => !s.has(w));
+  const ratio = (t.length - missing.length) / t.length;
+  return { ratio, missing };
+}
+
+function showResult(best, heardText) {
+  const pct = Math.round(best.ratio * 100);
+  const ok = best.ratio >= PASS;
+  const missingHtml = best.missing.length
+    ? `<div class="missing">राहिलेले शब्द: ${best.missing.map(w => `<span class="miss-word">${w}</span>`).join("")}</div>`
+    : "";
+  $("result").innerHTML = `
+    <div class="result">
+      <div class="${ok ? "good" : "bad"}">${ok ? "छान! " : "पुन्हा प्रयत्न करा. "}अचूकता: ${pct}%</div>
+      <div class="heard">तुम्ही म्हणालात: “${heardText || "—"}”</div>
+      ${missingHtml}
+    </div>`;
+  if (ok && state.idx < LEVELS[state.level].items.length - 1) {
+    // leave user on same sentence so they can retry if they want
+  }
+}
+
+$("next").onclick = () => { state.idx++; render(); };
+$("prev").onclick = () => { if (state.idx > 0) { state.idx--; render(); } };
+
+speechSynthesis.onvoiceschanged = fillVoices;
+fillVoices();
+render();
+</script>
+<p style="text-align:center;margin:24px 0 8px"><a href="https://forms.gle/SrpUSGF9crYwJYSu5" target="_blank" rel="noopener" style="color:#60a5fa;font-size:1.05rem;text-decoration:none">✍️ अभिप्राय द्या (Feedback)</a></p>
+</body>
+</html>
